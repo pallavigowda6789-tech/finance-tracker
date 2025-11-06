@@ -1,175 +1,144 @@
-import React, { useEffect, useState } from 'react'
-import { supabase } from './supabaseClient'
+import React, { useState, useEffect } from "react";
+import { createClient } from "@supabase/supabase-js";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 
-function App() {
-  const [expenses, setExpenses] = useState([])
-  const [title, setTitle] = useState('')
-  const [amount, setAmount] = useState('')
-  const [editingId, setEditingId] = useState(null)
+const supabaseUrl = "https://YOUR-PROJECT-URL.supabase.co";
+const supabaseKey = "YOUR-ANON-KEY";
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-  // Fetch data from Supabase
+export default function App() {
+  const [transactions, setTransactions] = useState([]);
+  const [title, setTitle] = useState("");
+  const [amount, setAmount] = useState("");
+  const [type, setType] = useState("expense");
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    fetchExpenses()
-  }, [])
+    fetchTransactions();
+  }, []);
 
-  async function fetchExpenses() {
+  async function fetchTransactions() {
+    setLoading(true);
     const { data, error } = await supabase
-      .from('expenses')
-      .select('*')
-      .order('id', { ascending: false })
-    if (error) console.error('❌ Error fetching:', error)
-    else setExpenses(data)
+      .from("expenses")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) console.error("Fetch error:", error.message);
+    else setTransactions(data);
+    setLoading(false);
   }
 
-  // Add new expense
-  async function addExpense(e) {
-    e.preventDefault()
-    if (!title || !amount) return alert('Please fill both fields')
-
+  async function addTransaction() {
+    if (!title || !amount) return alert("Enter title and amount");
     const { error } = await supabase
-      .from('expenses')
-      .insert([{ title, amount: parseFloat(amount) }])
-
-    if (error) alert('❌ Failed to add expense')
+      .from("expenses")
+      .insert([{ title, amount: +amount, type }]);
+    if (error) alert("Failed to add: " + error.message);
     else {
-      alert('✅ Expense added successfully!')
-      setTitle('')
-      setAmount('')
-      fetchExpenses()
+      setTitle("");
+      setAmount("");
+      fetchTransactions();
     }
   }
 
-  // Delete expense
-  async function deleteExpense(id) {
-    const confirmDelete = window.confirm('🗑️ Are you sure you want to delete this expense?')
-    if (!confirmDelete) return
+  const totalIncome = transactions
+    .filter((t) => t.type === "income")
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+  const totalExpense = transactions
+    .filter((t) => t.type === "expense")
+    .reduce((sum, t) => sum + Number(t.amount), 0);
 
-    const { error } = await supabase.from('expenses').delete().eq('id', id)
-    if (error) alert('❌ Failed to delete')
-    else fetchExpenses()
-  }
+  const COLORS = ["#00C49F", "#FF8042"];
 
-  // Start editing mode
-  function startEdit(expense) {
-    setEditingId(expense.id)
-    setTitle(expense.title)
-    setAmount(expense.amount)
-  }
-
-  // Save updated expense
-  async function updateExpense(e) {
-    e.preventDefault()
-    const { error } = await supabase
-      .from('expenses')
-      .update({ title, amount: parseFloat(amount) })
-      .eq('id', editingId)
-
-    if (error) alert('❌ Update failed')
-    else {
-      alert('✅ Expense updated successfully!')
-      setEditingId(null)
-      setTitle('')
-      setAmount('')
-      fetchExpenses()
-    }
-  }
+  const chartData = [
+    { name: "Income", value: totalIncome },
+    { name: "Expense", value: totalExpense },
+  ];
 
   return (
-    <div style={{ textAlign: 'center', padding: '30px', fontFamily: 'Arial' }}>
-      <h1>💰 My Finance Tracker</h1>
+    <div style={{ textAlign: "center", padding: "20px", fontFamily: "Arial" }}>
+      <h1>💰 Finance Tracker Dashboard</h1>
 
-      {/* Add / Edit Expense Form */}
-      <form onSubmit={editingId ? updateExpense : addExpense} style={{ marginBottom: '20px' }}>
+      {/* Add transaction form */}
+      <div style={{ marginBottom: "20px" }}>
         <input
           type="text"
-          placeholder="Enter expense title"
+          placeholder="Title"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          style={{
-            padding: '8px',
-            marginRight: '10px',
-            borderRadius: '8px',
-            border: '1px solid #ccc'
-          }}
+          style={{ marginRight: "10px" }}
         />
         <input
           type="number"
-          placeholder="Amount ₹"
+          placeholder="Amount"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
-          style={{
-            padding: '8px',
-            marginRight: '10px',
-            borderRadius: '8px',
-            border: '1px solid #ccc'
-          }}
+          style={{ marginRight: "10px" }}
         />
-        <button
-          type="submit"
-          style={{
-            padding: '8px 15px',
-            backgroundColor: editingId ? '#ff9800' : '#4CAF50',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: 'pointer'
-          }}
-        >
-          {editingId ? 'Update Expense' : 'Add Expense'}
+        <select value={type} onChange={(e) => setType(e.target.value)}>
+          <option value="expense">Expense</option>
+          <option value="income">Income</option>
+        </select>
+        <button onClick={addTransaction} style={{ marginLeft: "10px" }}>
+          Add
         </button>
-      </form>
+      </div>
 
-      {/* Expense List */}
-      <h3>Expenses:</h3>
-      {expenses.length === 0 ? (
-        <p>No expenses yet.</p>
-      ) : (
-        <ul style={{ listStyle: 'none', padding: 0 }}>
-          {expenses.map((item) => (
-            <li
-              key={item.id}
-              style={{
-                margin: '8px 0',
-                fontSize: '18px',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                gap: '10px'
-              }}
-            >
-              🧾 {item.title} — ₹{item.amount}
-              <button
-                onClick={() => startEdit(item)}
-                style={{
-                  padding: '5px 10px',
-                  backgroundColor: '#2196F3',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer'
-                }}
-              >
-                Edit
-              </button>
-              <button
-                onClick={() => deleteExpense(item.id)}
-                style={{
-                  padding: '5px 10px',
-                  backgroundColor: '#f44336',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer'
-                }}
-              >
-                Delete
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      {/* Summary */}
+      <div>
+        <h3>Total Income: ₹{totalIncome}</h3>
+        <h3>Total Expense: ₹{totalExpense}</h3>
+        <h2>Balance: ₹{totalIncome - totalExpense}</h2>
+      </div>
+
+      {/* Pie Chart */}
+      <h2>Income vs Expense</h2>
+      <ResponsiveContainer width="100%" height={300}>
+        <PieChart>
+          <Pie
+            data={chartData}
+            cx="50%"
+            cy="50%"
+            labelLine={false}
+            label={({ name, percent }) =>
+              `${name} ${(percent * 100).toFixed(0)}%`
+            }
+            outerRadius={100}
+            fill="#8884d8"
+            dataKey="value"
+          >
+            {chartData.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            ))}
+          </Pie>
+          <Tooltip />
+          <Legend />
+        </PieChart>
+      </ResponsiveContainer>
+
+      {/* Bar Chart */}
+      <h2>Transaction History</h2>
+      <ResponsiveContainer width="100%" height={300}>
+        <BarChart data={transactions}>
+          <XAxis dataKey="title" />
+          <YAxis />
+          <Tooltip />
+          <Legend />
+          <Bar dataKey="amount" fill="#8884d8" name="Amount" />
+        </BarChart>
+      </ResponsiveContainer>
     </div>
-  )
+  );
 }
 
-export default App
